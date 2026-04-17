@@ -1,0 +1,47 @@
+# airun blocklist
+# One pattern per line. Lines starting with # are comments.
+# Any token in the generated command that matches a pattern (case-insensitive
+# prefix match) will cause the command to be BLOCKED before execution.
+
+# Destructive file operations
+rm
+shred
+unlink
+
+# Privilege escalation
+sudo
+su
+doas
+pkexec
+
+# Disk/partition operations
+mkfs
+fdisk
+parted
+dd
+wipefs
+
+# System power
+shutdown
+reboot
+halt
+poweroff
+init
+
+# Dangerous redirects / device writes
+> /dev/
+tee /dev/
+
+# Package manager (remove/purge)
+apt remove
+apt purge
+apt-get remove
+apt-get purge
+yum remove
+dnf remove
+pacman -R
+
+# Network tools that can exfiltrate data
+nc
+ncat
+netcat
