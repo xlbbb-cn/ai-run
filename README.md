@@ -69,7 +69,6 @@ Create `~/.config/airun/blocklist.txt` with patterns to block:
 
 ```
 rm
-sudo
 mkfs
 dd
 chmod 777
@@ -136,6 +135,8 @@ You can override configuration values using environment variables:
 airun includes a safety filter that checks generated commands against a configurable blocklist. Commands containing blocked patterns will not be executed.
 
 The blocklist uses case-insensitive prefix matching on command tokens. For example, blocking `rm` will prevent execution of commands containing `rm`, `rm -rf`, etc.
+
+Commands that use `sudo` are treated as **dangerous operations**: they are allowed, but airun will always ask for an explicit confirmation before running them (and `sudo` may prompt for credentials interactively).
 
 **Note:** The safety filter is a helpful safeguard but not foolproof. Always review generated commands, especially when `show_command` is enabled.
 

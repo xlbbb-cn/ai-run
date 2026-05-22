@@ -57,6 +57,35 @@ static std::string to_lower(std::string s) {
     return s;
 }
 
+static bool is_elevation_token_posix(const std::string& token_lower) {
+    // Allow sudo with explicit confirmation (not hard-blocked).
+    return token_lower == "sudo";
+}
+
+static bool is_elevation_token_windows(const std::string& token_lower) {
+    // Best-effort detection; actual execution on Windows may differ.
+    // "runas" is the canonical elevation mechanism.
+    return token_lower == "runas" || token_lower == "runas.exe";
+}
+
+static bool contains_powershell_runas(const std::vector<std::string>& tokens) {
+    // Detect: Start-Process ... -Verb RunAs
+    for (size_t i = 0; i + 2 < tokens.size(); ++i) {
+        if (to_lower(tokens[i]) == "start-process" &&
+            to_lower(tokens[i + 1]) == "-verb" &&
+            to_lower(tokens[i + 2]) == "runas") {
+            return true;
+        }
+    }
+    // Also detect: -Verb RunAs (without Start-Process token in the same command)
+    for (size_t i = 0; i + 1 < tokens.size(); ++i) {
+        if (to_lower(tokens[i]) == "-verb" && to_lower(tokens[i + 1]) == "runas") {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SafetyFilter::matches(const std::string& token, const std::string& pattern) {
     // Case-insensitive: token starts with pattern
     std::string lt = to_lower(token);
@@ -65,15 +94,72 @@ bool SafetyFilter::matches(const std::string& token, const std::string& pattern)
     return lt == lp || lt.substr(0, lp.size()) == lp;
 }
 
-bool SafetyFilter::is_safe(const std::string& command, std::string& matched_pattern) const {
-    auto tokens = tokenize(command);
+SafetyResult SafetyFilter::evaluate(const std::string& command) const {
+    SafetyResult result;
+    const auto tokens = tokenize(command);
+
+    bool requires_confirmation = false;
+    std::string confirm_reason;
+
     for (const auto& token : tokens) {
+        const std::string lower = to_lower(token);
+#if defined(_WIN32)
+        if (is_elevation_token_windows(lower) || contains_powershell_runas(tokens)) {
+            requires_confirmation = true;
+            confirm_reason = "command requests administrator privileges";
+            result.matched_pattern = token;
+            break;
+        }
+#else
+        if (is_elevation_token_posix(lower)) {
+            requires_confirmation = true;
+            confirm_reason = "command uses sudo and may prompt for credentials";
+            result.matched_pattern = token;
+            break;
+        }
+#endif
+    }
+
+    // Blocklist enforcement (but do NOT hard-block elevation patterns we allow with confirmation).
+    for (const auto& token : tokens) {
+        const std::string token_lower = to_lower(token);
         for (const auto& pat : patterns_) {
+            const std::string pat_lower = to_lower(pat);
+
+#if defined(_WIN32)
+            if (is_elevation_token_windows(token_lower) && pat_lower == "runas") {
+                continue;
+            }
+#else
+            if (is_elevation_token_posix(token_lower) && pat_lower == "sudo") {
+                continue;
+            }
+#endif
+
             if (matches(token, pat)) {
-                matched_pattern = pat;
-                return false;
+                result.decision = SafetyDecision::Blocked;
+                result.matched_pattern = pat;
+                result.reason = "blocked by pattern '" + pat + "'";
+                return result;
             }
         }
+    }
+
+    if (requires_confirmation) {
+        result.decision = SafetyDecision::RequireConfirmation;
+        result.reason = confirm_reason;
+        return result;
+    }
+
+    result.decision = SafetyDecision::Safe;
+    return result;
+}
+
+bool SafetyFilter::is_safe(const std::string& command, std::string& matched_pattern) const {
+    auto eval = evaluate(command);
+    if (eval.decision == SafetyDecision::Blocked) {
+        matched_pattern = eval.matched_pattern;
+        return false;
     }
     return true;
 }

@@ -9,7 +9,9 @@ shred
 unlink
 
 # Privilege escalation
-sudo
+# NOTE: `sudo` is handled as a "dangerous operation" that requires explicit
+# confirmation (and may prompt for credentials). Keep other escalation tools
+# blocked by default.
 su
 doas
 pkexec

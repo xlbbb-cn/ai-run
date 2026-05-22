@@ -127,7 +127,8 @@ std::string PromptBuilder::system_prompt() {
            << "- On macOS and Linux, prefer standard POSIX utilities (sh, bash, coreutils, awk, sed, grep, find, du, df, etc.).\n"
            << "- On Windows, prefer PowerShell cmdlets and native commands.\n"
            << "- If the task is ambiguous, choose the most common/safe interpretation.\n"
-           << "- Do not include `sudo` or any command that requires root unless absolutely necessary and stated by the user.\n"
+           << "- Only use `sudo` (or admin elevation) when absolutely necessary and explicitly requested by the user.\n"
+           << "  If you use it, the user will be prompted to confirm a dangerous operation and to enter credentials interactively.\n"
            << "- Do not include destructive commands like `rm -rf`, `mkfs`, `dd` without explicit user instruction.\n";
 
     return prompt.str();
