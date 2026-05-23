@@ -89,23 +89,37 @@ int main(int argc, char* argv[]) {
 
     // ── Safety check ──────────────────────────────────────────────────────
     SafetyFilter filter(cfg.blocklist_file);
-    std::string matched;
-    if (!filter.is_safe(command, matched)) {
+    SafetyResult safety = filter.evaluate(command);
+    if (safety.decision == SafetyDecision::Blocked) {
         std::cerr << "[airun] \033[1;31mBLOCKED\033[0m: The generated command contains a "
-                  << "restricted pattern '" << matched << "'.\n"
+                  << "restricted pattern '" << safety.matched_pattern << "'.\n"
                   << "  Command: " << command << "\n"
                   << "  Edit " << cfg.blocklist_file << " to adjust the blocklist.\n";
         return 4;
     }
 
     // ── Show command ───────────────────────────────────────────────────────
-    if (cfg.show_command) {
+    if (cfg.show_command || safety.decision == SafetyDecision::RequireConfirmation) {
         std::cout << "\033[1;36m[airun]\033[0m Generated command:\n"
                   << "  \033[1m" << command << "\033[0m\n\n";
     }
 
+    bool already_confirmed = false;
+    if (safety.decision == SafetyDecision::RequireConfirmation) {
+        std::cerr << "[airun] \033[1;33mDANGEROUS\033[0m: " << safety.reason << "\n";
+        std::cout << "Proceed? [y/N] ";
+        std::string answer;
+        std::getline(std::cin, answer);
+        if (answer.empty() || (answer[0] != 'y' && answer[0] != 'Y')) {
+            std::cout << "[airun] Aborted.\n";
+            return 0;
+        }
+        already_confirmed = true;
+        std::cout << "\n";
+    }
+
     // ── Confirm before run ─────────────────────────────────────────────────
-    if (cfg.confirm_before_run) {
+    if (cfg.confirm_before_run && !already_confirmed) {
         std::cout << "Execute? [y/N] ";
         std::string answer;
         std::getline(std::cin, answer);
